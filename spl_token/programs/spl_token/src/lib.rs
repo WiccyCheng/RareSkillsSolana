@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
 
 declare_id!("FNpZLfWhfkmZo57CnBL8tGr6nHEBz3SYSz2ea4tdPACs");
 
@@ -29,7 +29,7 @@ pub mod spl_token {
 }
 
 #[derive(Accounts)]
-pub struct CreateMint {
+pub struct CreateMint<'info> {
     #[account(mut)]
     pub signer: Signer<'info>,
 
