@@ -3,6 +3,7 @@ import { Program, web3 } from "@coral-xyz/anchor";
 import * as splToken from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
 import { assert } from "chai";
+import BN from "bn.js";
 import type { SplToken } from "../target/types/spl_token";
 
 describe("spl_token", () => {
@@ -43,4 +44,40 @@ describe("spl_token", () => {
     assert.equal(tokenAccount.amount.toString(), "100000000000", "Token balance should be 100 tokens (with 9 decimals)");
     assert.equal(tokenAccount.delegate, null, "Token account should not have a delegate");
   });
+
+  it("Transfers tokens using CPI", async () => {
+    const [mint] = PublicKey.findProgramAddressSync([Buffer.from("my_mint"), signerKp.publicKey.toBuffer()], program.programId);
+    const fromAta = splToken.getAssociatedTokenAddressSync(mint, signerKp.publicKey, false);
+    const toAta = splToken.getAssociatedTokenAddressSync(mint, toKp.publicKey, false);
+
+    try {
+      await splToken.createAssociatedTokenAccount(
+        provider.connection,
+        signerKp,
+        mint,
+        toKp.publicKey
+      );
+    } catch (error) {
+      // ATA might already exist, which is fine
+      if (error instanceof Error && !error.message.includes("already in use")) {
+        throw error;
+      }
+    }
+
+    const transferAmount = new BN(10_000_000_000);
+
+    const tx = await program.methods
+    .transferTokens(transferAmount)
+    .accounts({
+      from: signerKp.publicKey,
+      fromAta: fromAta,
+      toAta: toAta,
+      tokenProgram: splToken.TOKEN_PROGRAM_ID,
+    }).rpc();
+
+    console.log("Transfer Transaction signature:", tx);
+
+    const toBalance = await provider.connection.getTokenAccountBalance(toAta);
+    assert.equal(toBalance.value.amount, transferAmount.toString(), "Recipient balance should match transfer amount");
+});
 });

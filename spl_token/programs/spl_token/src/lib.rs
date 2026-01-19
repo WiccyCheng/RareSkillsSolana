@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount};
+use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 
 declare_id!("FNpZLfWhfkmZo57CnBL8tGr6nHEBz3SYSz2ea4tdPACs");
 
@@ -23,6 +23,23 @@ pub mod spl_token {
 
         let cpi_ctx = CpiContext::new(token_program.to_account_info(), mint_to_instruction);
         token::mint_to(cpi_ctx, mint_amount)?;
+
+        Ok(())
+    }
+
+    pub fn transfer_tokens(ctx: Context<TransferSpl>, amount: u64) -> Result<()> {
+        let source_ata = &ctx.accounts.from_ata;
+        let destination_ata = &ctx.accounts.to_ata;
+        let authority = &ctx.accounts.from;
+        let token_program = &ctx.accounts.token_program;
+
+        let cpi_accounts = Transfer {
+            from: source_ata.to_account_info().clone(),
+            to: destination_ata.to_account_info().clone(),
+            authority: authority.to_account_info().clone(),
+        };
+        let cpi_ctx = CpiContext::new(token_program.to_account_info(), cpi_accounts);
+        token::transfer(cpi_ctx, amount)?;
 
         Ok(())
     }
@@ -55,4 +72,14 @@ pub struct CreateMint<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct TransferSpl<'info> {
+    pub from: Signer<'info>,
+    #[account(mut)]
+    pub from_ata: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub to_ata: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
 }
