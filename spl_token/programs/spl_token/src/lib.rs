@@ -43,6 +43,18 @@ pub mod spl_token {
 
         Ok(())
     }
+
+    pub fn get_balance(ctx: Context<GetBalance>) -> Result<()> {
+        let ata_pubkey = ctx.accounts.token_account.key();
+        let owner = ctx.accounts.token_account.owner;
+        let balance = ctx.accounts.token_account.amount;
+
+        msg!("Token Account Address: {}", ata_pubkey);
+        msg!("Token Account Owner: {}", owner);
+        msg!("Token Account Balance: {}", balance);
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -82,4 +94,10 @@ pub struct TransferSpl<'info> {
     #[account(mut)]
     pub to_ata: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct GetBalance<'info> {
+    #[account(mut)]
+    pub token_account: Account<'info, TokenAccount>,
 }

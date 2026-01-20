@@ -79,5 +79,19 @@ describe("spl_token", () => {
 
     const toBalance = await provider.connection.getTokenAccountBalance(toAta);
     assert.equal(toBalance.value.amount, transferAmount.toString(), "Recipient balance should match transfer amount");
-});
+  });
+
+  it("Reads token balance using CPI", async () => {
+    const [mint] = PublicKey.findProgramAddressSync([Buffer.from("my_mint"), signerKp.publicKey.toBuffer()], program.programId);
+    const ata = splToken.getAssociatedTokenAddressSync(mint, signerKp.publicKey, false);
+
+    const tx = await program.methods.getBalance().accounts({
+      tokenAccount: ata,
+    }).rpc();
+
+    console.log("Get Balance Transaction signature:", tx);
+
+    const balance = await provider.connection.getTokenAccountBalance(ata);
+    assert.isTrue(balance.value.uiAmount > 0, "Token balance should be greater than 0");
+  });
 });
