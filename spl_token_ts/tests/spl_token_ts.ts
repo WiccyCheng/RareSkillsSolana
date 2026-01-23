@@ -99,4 +99,61 @@ describe("TypeScript SPL Token Tests", () => {
     const balance = await provider.connection.getTokenAccountBalance(ataAddress);
     assert.equal(balance.value.amount.toString(), mintAmount.toString(), "Balance should match minted amount");
   });
+
+  it("Transfers tokens using TypeScript", async () => {
+    const mintPublicKey = await splToken.createMint(
+      provider.connection,
+      signerKp,
+      mintAuthority,
+      freezeAuthority,
+      mintDecimals,
+    );
+
+    const sourceAta = await splToken.createAssociatedTokenAccount(
+      provider.connection,
+      signerKp,
+      mintPublicKey,
+      signerKp.publicKey,
+    );
+
+    const destinationAta = await splToken.createAssociatedTokenAccount(
+      provider.connection,
+      signerKp,
+      mintPublicKey,
+      toKp.publicKey,
+    );
+
+    const mintAmount = BigInt(1000 * 10 ** mintDecimals);
+    await splToken.mintTo(
+      provider.connection,
+      signerKp,
+      mintPublicKey,
+      sourceAta,
+      mintAuthority,
+      mintAmount,
+    );
+
+    const sourceBalanceBefore = await provider.connection.getTokenAccountBalance(sourceAta);
+    const destinationBalanceBefore = await provider.connection.getTokenAccountBalance(destinationAta);
+
+    console.log("Source Balance Before Transfer:", sourceBalanceBefore.value.amount.toString());
+    console.log("Destination Balance Before Transfer:", destinationBalanceBefore.value.amount.toString());
+
+    const transferAmount = BigInt(500 * 10 ** mintDecimals);
+    await splToken.transfer(
+      provider.connection,
+      signerKp,
+      sourceAta,
+      destinationAta,
+      signerKp.publicKey,
+      transferAmount,
+    );
+
+    const sourceBalanceAfter = await provider.connection.getTokenAccountBalance(sourceAta);
+    const destinationBalanceAfter = await provider.connection.getTokenAccountBalance(destinationAta);
+    console.log("Source Balance after transfer:", sourceBalanceAfter.value.amount);
+    console.log("Destination Balance after transfer:", destinationBalanceAfter.value.amount);
+    assert.equal(sourceBalanceAfter.value.amount, (mintAmount - transferAmount).toString(), "Source should have 500 tokens left");
+    assert.equal(destinationBalanceAfter.value.amount, transferAmount.toString(), "Destination should have received 500 tokens");
+  });
 });
