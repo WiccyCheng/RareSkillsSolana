@@ -6,8 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-# 这个项目主要是 TypeScript 测试，不需要实际的程序
-# 但 Anchor 需要这个配置
+spl_token_ts = "7eGZP7XyhPLDWWArSMVbY7J1JX52B6GC5qmYrggyimEa"
 
 [registry]
 url = "https://api.apr.dev"
