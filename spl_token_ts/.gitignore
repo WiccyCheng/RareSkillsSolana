@@ -1,0 +1,22 @@
+# Anchor build artifacts
+.anchor
+target
+**/*.rs.bk
+test-ledger
+
+# Node modules
+node_modules
+.yarn
+
+# OS files
+.DS_Store
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
