@@ -15,6 +15,44 @@ pub mod token_sale {
         ctx.accounts.admin_config.admin = ctx.accounts.admin.key();
         Ok(())
     }
+
+    pub fn mint(ctx: Context<MintTokens>, lamports: u64) -> Result<()> {
+        let amount =  lamports.checked_mul(TOKENS_PER_SOL).ok_or(Errors::Overflow)?;
+
+        let current_supply = ctx.accounts.mint.supply;
+        let new_supply = current_supply.checked_add(amount).ok_or(Errors::Overflow)?;
+
+        require!(new_supply <= SUPPLY_CAP, Errors::SupplyLimit);
+
+        let transfer_instruction =  Transfer{
+            from: ctx.accounts.buyer.to_account_info(),
+            to: ctx.accounts.treasury.to_account_info(),
+        };
+
+        let cpi_context = CpiContext::new(
+            ctx.accounts.system_program.to_account_info(),
+            transfer_instruction,
+        );
+        transfer(cpi_context, lamports)?;
+
+        let bump = ctx.bumps.mint;
+        let signer_seeds: &[&[&[u8]]] = &[&[b"token_mint", &[bump]]];
+
+        let mint_to_instruction = MintTo{
+            mint: ctx.accounts.mint.to_account_info(),
+            to: ctx.accounts.buyer_ata.to_account_info(),
+            authority: ctx.accounts.mint.to_account_info(),
+        };
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            mint_to_instruction,
+            signer_seeds,
+        );
+        mint_to(cpi_context, amount)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -56,6 +94,37 @@ pub struct Initialize<'info> {
 // it calculates the space needed for the account and gives us access to AdminConfig::INIT_SPACE, as used above
 pub struct AdminConfig {
     pub admin: Pubkey,
+}
+
+#[derive(Accounts)]
+pub struct MintTokens<'info> {
+    #[account(mut)]
+    pub buyer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"token_mint"],
+        bump
+    )]
+    pub mint: Account<'info, Mint>,
+
+    #[account(
+        mut,
+        token::mint = mint,
+        token::authority = buyer,
+    )]
+    pub buyer_ata: Account<'info, TokenAccount>,
+
+    /// CHECK: PDA for treasury
+    #[account(
+        mut,
+        seeds = [b"treasury"],
+        bump
+    )]
+    pub treasury: AccountInfo<'info>,
+
+    pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
 }
 
 #[error_code]
