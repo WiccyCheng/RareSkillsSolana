@@ -79,6 +79,38 @@ describe("token_sale", () => {
     const newBuyerAtaBalance = Number(updatedBuyerAtaInfo.amount);
     assert.equal(newBuyerAtaBalance - initialBuyerAtaBalance, expectedTokenAmount, "Tokens were not correctly minted");
   });
+
+  it("stops minting when supply cap is reached", async () => {
+    const mintInfo = await getMint(connection, mint, undefined, TOKEN_PROGRAM_ID);
+    const currentSupply = Number(mintInfo.supply);
+
+    const SUPPLY_CAP = toRawTokenAmount(1000);
+    const remainingTokens = SUPPLY_CAP - currentSupply;
+
+    console.log(`Current supply: ${toDisplayAmount(currentSupply)} tokens,
+    Remaining tokens: ${toDisplayAmount(remainingTokens)} tokens`);
+
+    const tokensToMint = remainingTokens + toRawTokenAmount(20);
+    const solToSend = new anchor.BN(Math.ceil(tokensToMint / TOKENS_PER_SOL));
+
+    console.log(`Tring to mint ${toDisplayAmount(tokensToMint)} tokens, by sending ${lamportsToSol(solToSend)} SOL`);
+
+    try{
+      await program.methods.mint(solToSend).accounts({
+        buyer: buyer.publicKey,
+        mint: mint,
+        buyerAta: buyerAta,
+        treasury: treasuryPda,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      }).rpc();
+      assert.fail("Minting should have failed due to supply cap");
+    } catch (error) {
+      console.log("Expected error:", error.toString().substring(0, 150) + "...");
+      assert.include(error.toString(), "SupplyLimit", "Expected supply limit error not received");
+      console.log("Supply cap limit correctly enforced");
+    }
+  });
 });
 
 /** Lamports → SOL，用 @solana/web3.js 的 LAMPORTS_PER_SOL 自算即可，官方无现成函数 */
@@ -89,4 +121,9 @@ function lamportsToSol(lamports: anchor.BN | number): number {
 /** Raw token amount → 可读数量。标准 token 用 amount/10^decimals；要支持扩展可用 @solana/spl-token 的 amountToUiAmount / amountToUiAmountForMintWithoutSimulation */
 function toDisplayAmount(rawAmount: number, decimals: number = 9): string {
   return (rawAmount / 10 ** decimals).toFixed(2);
+}
+
+/** 可读数量 → raw token amount（toDisplayAmount 的逆），用于和链上 supply/amount 比较 */
+function toRawTokenAmount(displayAmount: number, decimals: number = 9): number {
+  return Math.floor(displayAmount * 10 ** decimals);
 }
