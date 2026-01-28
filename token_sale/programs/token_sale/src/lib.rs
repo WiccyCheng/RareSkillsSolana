@@ -59,6 +59,28 @@ pub mod token_sale {
 
         Ok(())
     }
+
+    pub fn withdraw_funds(ctx: Context<WithdrawFunds>, amount: u64) -> Result<()> {
+        let treasury_balance = ctx.accounts.treasury.lamports();
+        require!(treasury_balance >= amount, Errors::InsufficientFunds);
+
+        let bump = ctx.bumps.treasury;
+        let signer_seeds :&[&[&[u8]]] = &[&[b"treasury".as_ref(), &[bump]]];
+
+        let transfer_instruction = Transfer{
+            from: ctx.accounts.treasury.to_account_info(),
+            to: ctx.accounts.admin.to_account_info(),
+        };
+
+        let cpi_context = CpiContext::new_with_signer(
+            ctx.accounts.system_program.to_account_info(),
+            transfer_instruction,
+            signer_seeds,
+        );
+        transfer(cpi_context, amount)?;
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -130,6 +152,28 @@ pub struct MintTokens<'info> {
     pub treasury: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawFunds<'info> {
+    #[account(mut)]
+    pub admin: Signer<'info>,
+
+    #[account(
+        constraint = admin_config.admin == admin.key()
+        @ Errors::UnauthorizedAccess,
+    )]
+    pub admin_config: Account<'info, AdminConfig>,
+
+    /// CHECK: PDA for treasury
+    #[account(
+        mut,
+        seeds = [b"treasury"],
+        bump
+    )]
+    pub treasury: AccountInfo<'info>,
+
     pub system_program: Program<'info, System>,
 }
 

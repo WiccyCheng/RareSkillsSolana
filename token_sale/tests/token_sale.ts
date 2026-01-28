@@ -111,6 +111,42 @@ describe("token_sale", () => {
       console.log("Supply cap limit correctly enforced");
     }
   });
+
+  it("allows the admin to withdraw funds from treasury", async () => {
+    const initialAdminBalance = await connection.getBalance(adminKp.publicKey);
+    const initialTreasuryBalance = await connection.getBalance(treasuryPda);
+
+    console.log("Initial admin balance:", lamportsToSol(initialAdminBalance), "SOL");
+    console.log("Initial treasury balance:", lamportsToSol(initialTreasuryBalance), "SOL");
+
+    assert.isAbove(initialTreasuryBalance, 0, "Treasury should have funds from previous tests");
+
+    const amountToWithdraw = new anchor.BN(Math.floor(initialTreasuryBalance / 2));
+
+    try{
+      const tx = await program.methods.withdrawFunds(amountToWithdraw).accounts({
+        admin: adminKp.publicKey,
+        adminConfig: adminConfigKp.publicKey,
+        treasury: treasuryPda,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      }).rpc();
+      console.log("Withdrawal tx:", tx);
+
+      const newAdminBalance = await connection.getBalance(adminKp.publicKey);
+      const newTreasuryBalance = await connection.getBalance(treasuryPda);
+
+      console.log("New treasury balance:", lamportsToSol(newTreasuryBalance), "SOL");
+      console.log("New admin balance:", lamportsToSol(newAdminBalance), "SOL");
+
+      assert.approximately(initialTreasuryBalance - newTreasuryBalance, Number(amountToWithdraw), 10000, 
+      "Treasury balance did not decrease by approximately the correct amount");
+
+      assert.isTrue(newAdminBalance > initialAdminBalance, "Admin balance did not increase after withdrawal");
+    } catch (error) {
+      console.log("Error in withdraw test:", error);
+      throw error;
+    }
+  });
 });
 
 /** Lamports → SOL，用 @solana/web3.js 的 LAMPORTS_PER_SOL 自算即可，官方无现成函数 */
