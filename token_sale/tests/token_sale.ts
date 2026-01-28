@@ -150,6 +150,30 @@ describe("token_sale", () => {
       throw error;
     }
   });
+
+  it("prevents non-admins from withdrawing funds", async () => {
+    const nonAdminKeypair = web3.Keypair.generate();
+
+    const amountToWithdraw = new anchor.BN(1e8);
+
+    try {
+      await program.methods.withdrawFunds(amountToWithdraw).accounts({
+        admin: nonAdminKeypair.publicKey,
+        adminConfig: adminConfigKp.publicKey,
+        treasury: treasuryPda,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      }).signers([nonAdminKeypair]).rpc();
+      assert.fail("Non-admin was able to withdraw funds, but should be prohibited");
+    } catch (error) {
+      console.log("Expected error occurred:", error.toString().substring(0, 150) + "...");
+      assert.include(
+        error.toString(),
+        "UnauthorizedAccess",
+        "Expected unauthorized access error not received"
+      );
+      console.log("Non-admin withdrawal was correctly rejected");
+    }
+  });
 });
 
 /** Lamports → SOL，用 @solana/web3.js 的 LAMPORTS_PER_SOL 自算即可，官方无现成函数 */
