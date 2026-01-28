@@ -46,9 +46,10 @@ pub mod token_sale {
             authority: ctx.accounts.mint.to_account_info(),
         };
 
-        // CPI 需要：1) 被调程序 2) 指令(账户+数据) 3) signer_seeds。
-        // signer_seeds 只传「本程序要代为签名的 PDA」的 seeds，不是「指令用到的所有 seeds」；
-        // 若本次 CPI 没有需要本程序 PDA 签名的账户，用 CpiContext::new 即可，不必传 seeds。
+        // CpiContext::new_with_signer 用于「让本程序代表某个 PDA 签名」。
+        // 典型场景：1) 代表 treasury PDA 转 SOL/关账户 2) 代表 mint/authority PDA 铸币/转 token（本例）
+        // 3) 任何内层指令要求「本程序拥有的 PDA」作为 signer 时。不需要 PDA 签名时用 CpiContext::new。
+        // CPI 三件套：被调程序、指令、signer_seeds（只传要代为签名的 PDA 的 seeds，可多个 PDA）。
         let cpi_context = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             mint_to_instruction,
