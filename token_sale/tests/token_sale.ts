@@ -32,6 +32,8 @@ describe("token_sale", () => {
     [mint] = web3.PublicKey.findProgramAddressSync([Buffer.from("token_mint")], program.programId);
     [treasuryPda] = web3.PublicKey.findProgramAddressSync([Buffer.from("treasury")], program.programId);
 
+    // admin = 当前签名者地址；adminConfig = 存「谁是 admin」的配置账户地址。两个都要传：
+    // 程序用 admin 验证「谁在签名」，用 adminConfig 指向的账户读出「合法 admin」并写入。
     const tx = await program.methods.initialize().accounts({
       admin: adminKp.publicKey,
       adminConfig: adminConfigKp.publicKey,
@@ -123,6 +125,7 @@ describe("token_sale", () => {
 
     const amountToWithdraw = new anchor.BN(Math.floor(initialTreasuryBalance / 2));
 
+    // 即使 admin_config 已链上持久化，仍必须传入其地址：程序只能使用本笔交易传入的账户，不会自己去查链。
     try{
       const tx = await program.methods.withdrawFunds(amountToWithdraw).accounts({
         admin: adminKp.publicKey,

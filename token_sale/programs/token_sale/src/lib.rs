@@ -83,6 +83,11 @@ pub mod token_sale {
     }
 }
 
+// --- admin vs admin_config 说明 ---
+// admin 用 Signer：只验证「该地址在本交易中签了名」，不反序列化账户数据，不做完整性检查。
+// admin_config 用 Account<AdminConfig>：会加载该地址的账户、反序列化成 AdminConfig。
+// 两个都要传：admin =「当前在签名的人」，admin_config =「存『谁是 admin』这条配置的账户」。
+// 客户端传两个 publicKey：一个是签名者地址，一个是配置账户的地址（两者不是同一个东西）。
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(mut)]
@@ -116,7 +121,8 @@ pub struct Initialize<'info> {
     pub system_program: Program<'info, System>,
 }
 
-// Stores the admin public key
+// 持久化「谁是 admin」的链上配置。目的：让 admin 可配置、可更换（动态），
+// 后续指令（如 withdraw_funds）通过读取此账户做 constraint 校验当前 Signer 是否为合法 admin。
 #[account]
 #[derive(InitSpace)] // This is a derive attribute macro provided by anchor,
 // it calculates the space needed for the account and gives us access to AdminConfig::INIT_SPACE, as used above
@@ -155,6 +161,15 @@ pub struct MintTokens<'info> {
     pub system_program: Program<'info, System>,
 }
 
+// 为何 withdraw_funds 里还要传 admin_config？链上不是已经持久化了吗？
+// Solana 执行模型：程序不会自己去「查链上数据」，只能使用本笔交易里传入的账户。
+// 不传 admin_config，程序就拿不到那个账户，无法反序列化，也就做不了 admin_config.admin == admin.key()。
+// 传 admin_config = 告诉运行时「把该地址的账户交给程序」，程序才能读出里面的 admin 再与 Signer 比较。
+//
+// 为何不能传「非法的 Signer + 非法的 admin_config」蒙混过关？
+// Account<'info, AdminConfig> 会校验该账户的 owner 必须是本程序（declare_id!）。
+// 自己造的账户 owner 是 System 或别的程序，过不了校验；合法的 admin_config 只能来自 initialize 里
+// 用 init 创建的那类「程序拥有的账户」，只有程序能创建，无法伪造。
 #[derive(Accounts)]
 pub struct WithdrawFunds<'info> {
     #[account(mut)]
