@@ -35,7 +35,9 @@ pub mod token_sale {
         );
         transfer(cpi_context, lamports)?;
 
+        // bumps 由 Anchor 根据账户约束中的 bump 自动注入，无需在 MintTokens 里声明
         let bump = ctx.bumps.mint;
+        // signer_seeds 类型: &[&[&[u8]]] = 引用→(PDA列表→(每个PDA的种子列表→每个种子&[u8]))
         let signer_seeds: &[&[&[u8]]] = &[&[b"token_mint", &[bump]]];
 
         let mint_to_instruction = MintTo{
@@ -44,6 +46,9 @@ pub mod token_sale {
             authority: ctx.accounts.mint.to_account_info(),
         };
 
+        // CPI 需要：1) 被调程序 2) 指令(账户+数据) 3) signer_seeds。
+        // signer_seeds 只传「本程序要代为签名的 PDA」的 seeds，不是「指令用到的所有 seeds」；
+        // 若本次 CPI 没有需要本程序 PDA 签名的账户，用 CpiContext::new 即可，不必传 seeds。
         let cpi_context = CpiContext::new_with_signer(
             ctx.accounts.token_program.to_account_info(),
             mint_to_instruction,
