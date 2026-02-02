@@ -48,4 +48,39 @@ describe("basic_bank", () => {
     assert.equal(userAccountData.owner.toString(), signer.publicKey.toString());
     assert.equal(userAccountData.balance.toString(), "0");
   });
+
+  it("Deposits funds into the bank", async () => {
+    const initialUserBalance = await provider.connection.getBalance(signer.publicKey);
+    const initialBankBalance = await provider.connection.getBalance(bankAccount.publicKey);
+
+    console.log(`Initial user SOL balance: ${initialUserBalance / 1e9} SOL`);
+    console.log(`Initial bank SOL balance: ${initialBankBalance / 1e9} SOL`);
+
+    const tx = await program.methods.deposit(depositAmount).accounts({
+      bank: bankAccount.publicKey,
+      userAccount: userAccountPDA,
+      user: signer.publicKey,
+      systemProgram: anchor.web3.SystemProgram.programId,
+    }).rpc();
+
+    console.log("Deposit transaction signature", tx);
+
+    const userAccountData = await program.account.userAccount.fetch(userAccountPDA);
+
+    assert.equal(userAccountData.balance.toString(), depositAmount.toString());
+
+    const bankData = await program.account.bank.fetch(bankAccount.publicKey);
+    assert.equal(bankData.totalDeposits.toString(), depositAmount.toString());
+
+    const finalUserBalance = await provider.connection.getBalance(signer.publicKey);
+    const finalBankBalance = await provider.connection.getBalance(bankAccount.publicKey);
+
+    console.log(`final user SOL balance: ${finalUserBalance / 1e9} SOL`);
+    console.log(`final bank SOL balance: ${finalBankBalance / 1e9} SOL`);
+
+    assert.isTrue(finalBankBalance > initialBankBalance);
+
+    assert.isTrue(finalUserBalance < initialUserBalance - Number(depositAmount));
+    assert.isTrue(finalUserBalance > initialUserBalance - Number(depositAmount) - 10000);
+  });
 });
