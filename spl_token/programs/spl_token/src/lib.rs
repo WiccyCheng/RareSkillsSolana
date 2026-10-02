@@ -1,11 +1,14 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token::spl_token::instruction::AuthorityType;
 use anchor_spl::token::{self, Mint, MintTo, Token, TokenAccount, Transfer};
 
-declare_id!("FNpZLfWhfkmZo57CnBL8tGr6nHEBz3SYSz2ea4tdPACs");
+declare_id!("D2JHzuS9izAS2kkP4TQAbhGsVE5GysUYNGc94dptF7uf");
 
 #[program]
 pub mod spl_token {
+    use anchor_spl::token::SetAuthority;
+
     use super::*;
 
     pub fn create_and_mint_account(ctx: Context<CreateMint>) -> Result<()> {
@@ -27,14 +30,14 @@ pub mod spl_token {
         Ok(())
     }
 
-    pub fn transfer_tokens(ctx: Context<TransferSpl>, amount: u64) -> Result<()> {
-        let source_ata = &ctx.accounts.from_ata;
+    pub fn transfer_tokens(ctx: Context<TransferSql>, amount: u64) -> Result<()> {
+        let source_data = &ctx.accounts.from_ata;
         let destination_ata = &ctx.accounts.to_ata;
         let authority = &ctx.accounts.from;
         let token_program = &ctx.accounts.token_program;
 
         let cpi_accounts = Transfer {
-            from: source_ata.to_account_info().clone(),
+            from: source_data.to_account_info().clone(),
             to: destination_ata.to_account_info().clone(),
             authority: authority.to_account_info().clone(),
         };
@@ -52,6 +55,18 @@ pub mod spl_token {
         msg!("Token Account Address: {}", ata_pubkey);
         msg!("Token Account Owner: {}", owner);
         msg!("Token Account Balance: {}", balance);
+
+        Ok(())
+    }
+
+    pub fn disable_mint_authority(ctx: Context<DisableMintAuthority>) -> Result<()> {
+        let token_program = &ctx.accounts.token_program;
+        let disable_instruction = SetAuthority {
+            current_authority: ctx.accounts.signer.to_account_info(),
+            account_or_mint: ctx.accounts.mint.to_account_info(),
+        };
+        let cpi_ctx = CpiContext::new(token_program.to_account_info(), disable_instruction);
+        token::set_authority(cpi_ctx, AuthorityType::MintTokens, None)?;
 
         Ok(())
     }
@@ -87,7 +102,7 @@ pub struct CreateMint<'info> {
 }
 
 #[derive(Accounts)]
-pub struct TransferSpl<'info> {
+pub struct TransferSql<'info> {
     pub from: Signer<'info>,
     #[account(mut)]
     pub from_ata: Account<'info, TokenAccount>,
@@ -100,4 +115,12 @@ pub struct TransferSpl<'info> {
 pub struct GetBalance<'info> {
     #[account(mut)]
     pub token_account: Account<'info, TokenAccount>,
+}
+
+#[derive(Accounts)]
+pub struct DisableMintAuthority<'info> {
+    #[account(mut)]
+    pub mint: Account<'info, Mint>,
+    pub signer: Signer<'info>,
+    pub token_program: Program<'info, Token>,
 }
