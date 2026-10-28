@@ -1,9 +1,9 @@
 use anchor_lang::prelude::*;
+use anchor_lang::solana_program::program as solana_program;
 use anchor_lang::solana_program::rent::Rent;
 use anchor_lang::solana_program::system_instruction;
-use anchor_lang::solana_program::program as solana_program;
 
-declare_id!("7HyG7mr54ZgtU99jAYbap6s6979Mg3ENvfaif29DH4Qa");
+declare_id!("2BwB9RyENHoBsNKnHyQ53w7KAM2FrRJpcqHumvfdCTgN");
 
 #[program]
 pub mod basic_bank {
@@ -12,7 +12,7 @@ pub mod basic_bank {
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let bank = &mut ctx.accounts.bank;
         bank.total_deposits = 0;
-        
+
         msg!("Bank initialized");
         Ok(())
     }
@@ -21,7 +21,7 @@ pub mod basic_bank {
         let user_account = &mut ctx.accounts.user_account;
         user_account.owner = ctx.accounts.user.key();
         user_account.balance = 0;
-        
+
         msg!("User account created for {:?}", user_account.owner);
         Ok(())
     }
@@ -29,8 +29,8 @@ pub mod basic_bank {
     pub fn deposit(ctx: Context<Deposit>, amount: u64) -> Result<()> {
         require!(amount > 0, BankError::ZeroAmount);
 
-        let user = & ctx.accounts.user.key();
-        let bank = & ctx.accounts.bank.key();
+        let user = &ctx.accounts.user.key();
+        let bank = &ctx.accounts.bank.key();
 
         let transfer_ix = system_instruction::transfer(user, bank, amount);
         solana_program::invoke(
@@ -42,12 +42,62 @@ pub mod basic_bank {
         )?;
 
         let user_account = &mut ctx.accounts.user_account;
-        user_account.balance = user_account.balance.checked_add(amount).ok_or(BankError::Overflow)?;
+        user_account.balance = user_account
+            .balance
+            .checked_add(amount)
+            .ok_or(BankError::Overflow)?;
 
         let bank = &mut ctx.accounts.bank;
-        bank.total_deposits = bank.total_deposits.checked_add(amount).ok_or(BankError::Overflow)?;
+        bank.total_deposits = bank
+            .total_deposits
+            .checked_add(amount)
+            .ok_or(BankError::Overflow)?;
 
         msg!("Deposited {:?} lamports for {:?}", amount, user);
+        Ok(())
+    }
+
+    pub fn get_balance(ctx: Context<GetBalance>) -> Result<u64> {
+        let user_account = &ctx.accounts.user_account;
+        let balance = user_account.balance;
+
+        msg!("Balance for {}: {} lamports", user_account.owner, balance);
+        Ok(balance)
+    }
+
+    pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        require!(amount > 0, BankError::ZeroAmount);
+
+        let bank = &mut ctx.accounts.bank;
+        let user_account = &mut ctx.accounts.user_account;
+        let user = ctx.accounts.user.key();
+
+        require!(
+            user_account.balance >= amount,
+            BankError::InsufficientBalance
+        );
+
+        user_account.balance = user_account
+            .balance
+            .checked_sub(amount)
+            .ok_or(BankError::Underflow)?;
+
+        bank.total_deposits = bank
+            .total_deposits
+            .checked_sub(amount)
+            .ok_or(BankError::Underflow)?;
+
+        let rent = Rent::get()?;
+        let bank_account_info = ctx.accounts.bank.to_account_info();
+        let minimum_balance = rent.minimum_balance(bank_account_info.data_len());
+
+        let available_lamports = bank_account_info.lamports();
+        let transfer_amount = amount.min(available_lamports.saturating_sub(minimum_balance));
+
+        **bank_account_info.try_borrow_mut_lamports()? -= transfer_amount;
+        **ctx.accounts.user.try_borrow_mut_lamports()? += transfer_amount;
+
+        msg!("Withdrawn {} lamports for {}", amount, user);
         Ok(())
     }
 }
@@ -77,15 +127,39 @@ pub struct CreateUserAccount<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Deposit<'info>{
+pub struct Deposit<'info> {
     #[account(mut)]
     pub bank: Account<'info, Bank>,
 
     #[account(
-        mut, 
-        seeds = [b"user-account", user.key().as_ref()], 
-        bump, 
+        mut,
+        seeds = [b"user-account", user.key().as_ref()],
+        bump,
         constraint = user_account.owner == user.key() @ BankError::UnauthorizedAccess)]
+    pub user_account: Account<'info, UserAccount>,
+
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct GetBalance<'info> {
+    pub bank: Account<'info, Bank>,
+
+    #[account(seeds = [b"user-account", user.key().as_ref()],bump,constraint = user_account.owner==user.key()@ BankError::UnauthorizedAccess)]
+    pub user_account: Account<'info, UserAccount>,
+
+    pub user: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Withdraw<'info> {
+    #[account(mut)]
+    pub bank: Account<'info, Bank>,
+
+    #[account(mut, seeds = [b"user-account",user.key().as_ref()], bump, constraint = user_account.owner==user.key() @BankError::UnauthorizedAccess)]
     pub user_account: Account<'info, UserAccount>,
 
     #[account(mut)]
